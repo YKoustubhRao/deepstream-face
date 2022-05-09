@@ -91,7 +91,7 @@ def sgie_sink_pad_buffer_probe(pad,info,u_data):
         print("frame_number",frame_number)
         if frame_meta.pad_index not in user_meta_map:
             user_meta_map[frame_meta.pad_index] = {}
-        for k in user_meta_map[frame_meta.pad_index]:
+        for k in list(user_meta_map[frame_meta.pad_index]):
             user_meta_map[frame_meta.pad_index][k] = user_meta_map[frame_meta.pad_index][k] + 1
             if user_meta_map[frame_meta.pad_index][k] > 100:
                 del user_meta_map[frame_meta.pad_index][k]
