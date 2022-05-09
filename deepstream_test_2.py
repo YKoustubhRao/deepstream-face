@@ -57,7 +57,7 @@ pgie_classes_str= ["face"]
 # DATASET_PATH = 'embeddings/psu_embeddings.npz'
 
 # faces_embeddings, labels = load_dataset(DATASET_PATH)
-user_meta = {}
+user_meta_map = {}
 
 unknown_emb_count = 0
 def sgie_sink_pad_buffer_probe(pad,info,u_data):
@@ -89,12 +89,12 @@ def sgie_sink_pad_buffer_probe(pad,info,u_data):
         frame_number=frame_meta.frame_num
         num_rects = frame_meta.num_obj_meta
         print("frame_number",frame_number)
-        if frame_meta.pad_index in user_meta:
-            user_meta[frame_meta.pad_index] = {}
-        for k in user_meta[frame_meta.pad_index]:
-            user_meta[frame_meta.pad_index][k] = user_meta[frame_meta.pad_index][k] + 1
-            if user_meta[frame_meta.pad_index][k] > 100:
-                del user_meta[frame_meta.pad_index][k]
+        if frame_meta.pad_index in user_meta_map:
+            user_meta_map[frame_meta.pad_index] = {}
+        for k in user_meta_map[frame_meta.pad_index]:
+            user_meta_map[frame_meta.pad_index][k] = user_meta_map[frame_meta.pad_index][k] + 1
+            if user_meta_map[frame_meta.pad_index][k] > 100:
+                del user_meta_map[frame_meta.pad_index][k]
         l_obj=frame_meta.obj_meta_list
 
         while l_obj is not None:
@@ -145,15 +145,15 @@ def sgie_sink_pad_buffer_probe(pad,info,u_data):
                         maxi = np.argmax(result)
                         maxval = np.max(result)
                         if maxval > 0.65:
-                            if (all_indexes[maxi] in user_meta[frame_meta.pad_index] and user_meta[frame_meta.pad_index][all_indexes[maxi]] > 50) or (all_indexes[maxi] not in user_meta[frame_meta.pad_index]):
+                            if (all_indexes[maxi] in user_meta_map[frame_meta.pad_index] and user_meta_map[frame_meta.pad_index][all_indexes[maxi]] > 50) or (all_indexes[maxi] not in user_meta_map[frame_meta.pad_index]):
                                 print("Match Found", all_indexes[maxi], maxval)
                                 save_entry_log(all_indexes[maxi], frame_meta.pad_index)
-                                user_meta[frame_meta.pad_index][all_indexes[maxi]] = 0
+                                user_meta_map[frame_meta.pad_index][all_indexes[maxi]] = 0
                         elif maxval < 0.55:
                             print("Unknown found")
                             save_embeddings(face_to_predict_embedding, "unk_"+str(unknown_emb_count))
                             unknown_emb_count = unknown_emb_count +1
-                            user_meta[frame_meta.pad_index]["unk_"+str(unknown_emb_count)] = 0
+                            user_meta_map[frame_meta.pad_index]["unk_"+str(unknown_emb_count)] = 0
                             ## add embeding
                         # result =  (str(result).title())
                         # print('Predicted name: %s' % result)
