@@ -29,7 +29,8 @@ import numpy as np
 import ctypes
 import sys
 import math
-import platform
+import string
+import random
 from common.is_aarch_64 import is_aarch64
 from common.bus_call import bus_call
 from common.FPS import GETFPS
@@ -59,7 +60,9 @@ pgie_classes_str= ["face"]
 # faces_embeddings, labels = load_dataset(DATASET_PATH)
 user_meta_map = {}
 
-unknown_emb_count = 0
+def id_generator(size=6, chars=string.ascii_uppercase + string.digits):
+    return ''.join(random.choice(chars) for _ in range(size))
+
 def sgie_sink_pad_buffer_probe(pad,info,u_data):
     
     frame_number=0
@@ -151,9 +154,9 @@ def sgie_sink_pad_buffer_probe(pad,info,u_data):
                                 user_meta_map[frame_meta.pad_index][all_indexes[maxi]] = 0
                         elif maxval < 0.55:
                             print("Unknown found")
-                            save_embeddings(face_to_predict_embedding, "unk_"+str(unknown_emb_count))
-                            unknown_emb_count = unknown_emb_count +1
-                            user_meta_map[frame_meta.pad_index]["unk_"+str(unknown_emb_count)] = 0
+                            unk_id = id_generator()
+                            save_embeddings(face_to_predict_embedding, "unk_"+ unk_id)
+                            user_meta_map[frame_meta.pad_index]["unk_"+ unk_id] = 0
                             ## add embeding
                         # result =  (str(result).title())
                         # print('Predicted name: %s' % result)
