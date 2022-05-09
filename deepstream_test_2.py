@@ -147,13 +147,14 @@ def sgie_sink_pad_buffer_probe(pad,info,u_data):
                         result = predict_using_classifier(df.to_numpy(), face_to_predict_embedding)
                         maxi = np.argmax(result)
                         maxval = np.max(result)
+                        print("maxval>>>>",maxval,maxi)
                         if maxval > 0.65:
                             if (all_indexes[maxi] in user_meta_map[frame_meta.pad_index] and user_meta_map[frame_meta.pad_index][all_indexes[maxi]] > 50) or (all_indexes[maxi] not in user_meta_map[frame_meta.pad_index]):
                                 print("Match Found", all_indexes[maxi], maxval)
                                 save_entry_log(all_indexes[maxi], frame_meta.pad_index)
                                 user_meta_map[frame_meta.pad_index][all_indexes[maxi]] = 0
                         elif maxval < 0.55:
-                            print("Unknown found")
+                            print("Unknown found", face_to_predict_embedding.shape())
                             unk_id = id_generator()
                             save_embeddings(face_to_predict_embedding, "unk_"+ unk_id)
                             user_meta_map[frame_meta.pad_index]["unk_"+ unk_id] = 0
