@@ -23,6 +23,6 @@ def save_entry_log(id, cam_id):
     df = pd.DataFrame([[id, cam_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S")]])
     df.to_csv('./data/log.csv', mode='a', index=False, header=False)
 
-def save_embeddings(label, vectors):
+def save_embeddings(vectors, label):
     df = pd.DataFrame(vectors, index=[label])
     df.to_csv('./data/embedding.csv', mode='a', header=False)
