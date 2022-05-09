@@ -154,7 +154,7 @@ def sgie_sink_pad_buffer_probe(pad,info,u_data):
                                 save_entry_log(all_indexes[maxi], frame_meta.pad_index)
                                 user_meta_map[frame_meta.pad_index][all_indexes[maxi]] = 0
                         elif maxval < 0.55:
-                            print("Unknown found", face_to_predict_embedding.shape())
+                            print("Unknown found", face_to_predict_embedding.shape)
                             unk_id = id_generator()
                             save_embeddings(face_to_predict_embedding, "unk_"+ unk_id)
                             user_meta_map[frame_meta.pad_index]["unk_"+ unk_id] = 0
