@@ -29,8 +29,6 @@ import numpy as np
 import ctypes
 import sys
 import math
-import string
-import random
 from common.is_aarch_64 import is_aarch64
 from common.bus_call import bus_call
 from common.FPS import GETFPS
@@ -59,9 +57,6 @@ pgie_classes_str= ["face"]
 
 # faces_embeddings, labels = load_dataset(DATASET_PATH)
 user_meta_map = {}
-
-def id_generator(size=6, chars=string.ascii_uppercase + string.digits):
-    return ''.join(random.choice(chars) for _ in range(size))
 
 def sgie_sink_pad_buffer_probe(pad,info,u_data):
     
@@ -153,11 +148,6 @@ def sgie_sink_pad_buffer_probe(pad,info,u_data):
                                 print("Match Found", all_indexes[maxi], maxval)
                                 save_entry_log(all_indexes[maxi], frame_meta.pad_index)
                                 user_meta_map[frame_meta.pad_index][all_indexes[maxi]] = 0
-                        elif maxval < 0.55:
-                            print("Unknown found")
-                            unk_id = id_generator()
-                            save_embeddings(face_to_predict_embedding, "unk_"+ unk_id)
-                            user_meta_map[frame_meta.pad_index]["unk_"+ unk_id] = 0
                             ## add embeding
                         # result =  (str(result).title())
                         # print('Predicted name: %s' % result)
@@ -342,6 +332,7 @@ def main(args):
     if not pgie:
         sys.stderr.write(" Unable to create sgie \n")
 
+    
     print("Creating tiler \n ")
     tiler=Gst.ElementFactory.make("nvmultistreamtiler", "nvtiler")
     if not tiler:
@@ -351,24 +342,21 @@ def main(args):
     if not nvvidconv:
         sys.stderr.write(" Unable to create nvvidconv \n")
     print("Creating nvosd \n ")
+    nvosd = Gst.ElementFactory.make("nvdsosd", "onscreendisplay")
+    if not nvosd:
+        sys.stderr.write(" Unable to create nvosd \n")
+    nvosd.set_property('process-mode',OSD_PROCESS_MODE)
+    nvosd.set_property('display-text',OSD_DISPLAY_TEXT)
+    if(is_aarch64()):
+        print("Creating transform \n ")
+        transform=Gst.ElementFactory.make("nvegltransform", "nvegl-transform")
+        if not transform:
+            sys.stderr.write(" Unable to create transform \n")
 
-    fakesink = Gst.ElementFactory.make("fakesink", "fakesink")
-    # nvosd = Gst.ElementFactory.make("nvdsosd", "onscreendisplay")
-    # if not nvosd:
-    #     sys.stderr.write(" Unable to create nvosd \n")
-    # nvosd.set_property('process-mode',OSD_PROCESS_MODE)
-    # nvosd.set_property('display-text',OSD_DISPLAY_TEXT)
-
-    # if(is_aarch64()):
-    #     print("Creating transform \n ")
-    #     transform=Gst.ElementFactory.make("nvegltransform", "nvegl-transform")
-    #     if not transform:
-    #         sys.stderr.write(" Unable to create transform \n")
-
-    # print("Creating EGLSink \n")
-    # sink = Gst.ElementFactory.make("nveglglessink", "nvvideo-renderer")
-    # if not sink:
-    #     sys.stderr.write(" Unable to create egl sink \n")
+    print("Creating EGLSink \n")
+    sink = Gst.ElementFactory.make("nveglglessink", "nvvideo-renderer")
+    if not sink:
+        sys.stderr.write(" Unable to create egl sink \n")
 
     if is_live:
         print("Atleast one of the sources is live")
@@ -377,7 +365,7 @@ def main(args):
     streammux.set_property('width', 1920)
     streammux.set_property('height', 1080)
     streammux.set_property('batch-size', number_sources)
-    streammux.set_property('batched-push-timeout', 4000000)
+    streammux.set_property('batched-push-timeout', 40000)
     pgie.set_property('config-file-path', "face_detector_config.txt")
     pgie_batch_size=pgie.get_property("batch-size")
     if(pgie_batch_size != number_sources):
@@ -396,7 +384,7 @@ def main(args):
     tiler.set_property("columns",tiler_columns)
     tiler.set_property("width", TILED_OUTPUT_WIDTH)
     tiler.set_property("height", TILED_OUTPUT_HEIGHT)
-    # sink.set_property("qos",0)
+    sink.set_property("qos",0)
 
     config = configparser.ConfigParser()
     config.read('tracker_config.txt')
@@ -428,10 +416,10 @@ def main(args):
     pipeline.add(sgie)
     pipeline.add(tiler)
     pipeline.add(nvvidconv)
-    pipeline.add(fakesink)
-    # if is_aarch64():
-    #     pipeline.add(transform)
-    # pipeline.add(sink)
+    pipeline.add(nvosd)
+    if is_aarch64():
+        pipeline.add(transform)
+    pipeline.add(sink)
 
     print("Linking elements in the Pipeline \n")
     streammux.link(queue1)
@@ -443,14 +431,14 @@ def main(args):
     tiler.link(queue3)
     queue3.link(nvvidconv)
     nvvidconv.link(queue4)
-    queue4.link(fakesink)
-    # if is_aarch64():
-    #     nvosd.link(queue5)
-    #     queue5.link(transform)
-    #     transform.link(sink)
-    # else:
-    #     nvosd.link(queue5)
-    #     queue5.link(sink)
+    queue4.link(nvosd)
+    if is_aarch64():
+        nvosd.link(queue5)
+        queue5.link(transform)
+        transform.link(sink)
+    else:
+        nvosd.link(queue5)
+        queue5.link(sink) 
 
     # create an event loop and feed gstreamer bus mesages to it
     loop = GObject.MainLoop()
