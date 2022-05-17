@@ -85,7 +85,6 @@ def sgie_sink_pad_buffer_probe(pad,info,u_data):
             break
 
         frame_number=frame_meta.frame_num
-        num_rects = frame_meta.num_obj_meta
         print("frame_number",frame_number)
         if frame_meta.pad_index not in user_meta_map:
             user_meta_map[frame_meta.pad_index] = {}
