@@ -3,10 +3,15 @@ from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 import pandas as pd
 from datetime import datetime
+import sqlite3
+
+conn = sqlite3.connect('./data/db.sqlite')
 
 def load_dataset():
-	data = pd.read_csv("./data/embedding.csv", index_col=0)
-	return data
+	df = pd.read_sql('select * from embeddings', conn)
+	names = df[df.columns[0:1]]
+	embeddings = df[df.columns[1:385]]
+	return names.to_numpy(), embeddings.to_numpy(dtype=np.float64)
 
 def normalize_vectors(vectors):
 	# normalize input vectors
@@ -20,9 +25,9 @@ def predict_using_classifier(faces_embeddings, face_to_predict_embedding):
 
 
 def save_entry_log(id, cam_id):
-    df = pd.DataFrame([[id, cam_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S")]])
-    df.to_csv('./data/log.csv', mode='a', index=False, header=False)
+	df = pd.DataFrame([[id, cam_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S")]], columns=["name", "timestamp"])
+	df.to_sql('logs', conn, if_exists='append', index=False)
 
 def save_embeddings(vectors, label):
-    df = pd.DataFrame(vectors, index=[label])
-    df.to_csv('./data/embedding.csv', mode='a', header=False)
+    df = pd.DataFrame(np.array([label]) + vectors, columns=["name"] + list(range(0, 384)))
+    df.to_sql('embeddings', conn, if_exists='append', index=False)

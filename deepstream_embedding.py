@@ -33,12 +33,8 @@ from common.is_aarch_64 import is_aarch64
 from common.bus_call import bus_call
 from common.FPS import GETFPS
 
-
-
 import pyds
 from utils import load_dataset, normalize_vectors, predict_using_classifier, save_embeddings, save_entry_log
-
-fps_streams={}
 
 MAX_DISPLAY_LEN=64
 PRIMARY_DETECTOR_UID = 1
@@ -56,7 +52,10 @@ pgie_classes_str= ["face"]
 # DATASET_PATH = 'embeddings/psu_embeddings.npz'
 
 # faces_embeddings, labels = load_dataset(DATASET_PATH)
-user_meta_map = {}
+user_max_conf = 0
+vad_frames = 0
+
+best_embedding = None
 
 def sgie_sink_pad_buffer_probe(pad,info,u_data):
     
@@ -86,14 +85,8 @@ def sgie_sink_pad_buffer_probe(pad,info,u_data):
 
         frame_number=frame_meta.frame_num
         print("frame_number",frame_number)
-        if frame_meta.pad_index not in user_meta_map:
-            user_meta_map[frame_meta.pad_index] = {}
-        for k in list(user_meta_map[frame_meta.pad_index]):
-            user_meta_map[frame_meta.pad_index][k] = user_meta_map[frame_meta.pad_index][k] + 1
-            if user_meta_map[frame_meta.pad_index][k] > 100:
-                del user_meta_map[frame_meta.pad_index][k]
         l_obj=frame_meta.obj_meta_list
-
+        vad_frames = vad_frames + 1
         while l_obj is not None:
             try:
                 # Casting l_obj.data to pyds.NvDsObjectMeta
@@ -136,17 +129,21 @@ def sgie_sink_pad_buffer_probe(pad,info,u_data):
                         yhat = v.reshape((1,-1))
                         face_to_predict_embedding = normalize_vectors(yhat)
                         print("face_to_predict_embedding",face_to_predict_embedding, obj_meta.confidence, obj_meta.object_id)
-                        df = load_dataset()
-                        all_indexes = list(df.index.values)
-                        result = predict_using_classifier(df.to_numpy(), face_to_predict_embedding)
+                        all_indexes, embeddings = load_dataset()
+                        all_indexes = list(all_indexes)
+                        result = predict_using_classifier(embeddings, face_to_predict_embedding)
                         maxi = np.argmax(result)
                         maxval = np.max(result)
                         print("maxval>>>>",maxval,maxi)
-                        if maxval > 0.65:
-                            if (all_indexes[maxi] in user_meta_map[frame_meta.pad_index] and user_meta_map[frame_meta.pad_index][all_indexes[maxi]] > 50) or (all_indexes[maxi] not in user_meta_map[frame_meta.pad_index]):
-                                print("Match Found", all_indexes[maxi], maxval)
-                                save_entry_log(all_indexes[maxi], frame_meta.pad_index)
-                                user_meta_map[frame_meta.pad_index][all_indexes[maxi]] = 0
+                        print("Unknown found")
+                        if maxval > 0.5 and maxval > user_max_conf:
+                            user_max_conf = maxval
+                            best_embedding = face_to_predict_embedding
+                            
+                        if vad_frames > 100 and best_embedding is not None:
+                            save_embeddings(face_to_predict_embedding, u_data)
+                            sys.exit(1)
+
                             ## add embeding
                         # result =  (str(result).title())
                         # print('Predicted name: %s' % result)
@@ -260,13 +257,9 @@ def create_source_bin(index,uri):
 
 def main(args):
     # Check input arguments
-    if len(args) < 2:
-        sys.stderr.write("usage: %s <uri1> [uri2] ... [uriN]\n" % args[0])
+    if len(args) != 3:
+        sys.stderr.write("usage: %s <uri1> <name>\n" % args[0])
         sys.exit(1)
-
-    for i in range(0,len(args)-1):
-        fps_streams["stream{0}".format(i)]=GETFPS(i)
-    number_sources=len(args)-1
 
     # Standard GStreamer initialization
     GObject.threads_init()
@@ -288,23 +281,24 @@ def main(args):
         sys.stderr.write(" Unable to create NvStreamMux \n")
 
     pipeline.add(streammux)
-    for i in range(number_sources):
-        print("Creating source_bin ",i," \n ")
-        uri_name=args[i+1]
-        if uri_name.find("rtsp://") == 0 :
-            is_live = True
-        source_bin=create_source_bin(i, uri_name)
-        if not source_bin:
-            sys.stderr.write("Unable to create source bin \n")
-        pipeline.add(source_bin)
-        padname="sink_%u" %i
-        sinkpad= streammux.get_request_pad(padname)
-        if not sinkpad:
-            sys.stderr.write("Unable to create sink pad bin \n")
-        srcpad=source_bin.get_static_pad("src")
-        if not srcpad:
-            sys.stderr.write("Unable to create src pad bin \n")
-        srcpad.link(sinkpad)
+    print("Creating source_bin ",0," \n ")
+    number_sources = 1
+    uri_name=args[1]
+    person_name = args[2]
+    if uri_name.find("rtsp://") == 0 :
+        is_live = True
+    source_bin=create_source_bin(0, uri_name)
+    if not source_bin:
+        sys.stderr.write("Unable to create source bin \n")
+    pipeline.add(source_bin)
+    padname="sink_%u" %0
+    sinkpad= streammux.get_request_pad(padname)
+    if not sinkpad:
+        sys.stderr.write("Unable to create sink pad bin \n")
+    srcpad=source_bin.get_static_pad("src")
+    if not srcpad:
+        sys.stderr.write("Unable to create src pad bin \n")
+    srcpad.link(sinkpad)
     queue1=Gst.ElementFactory.make("queue","queue1")
     queue2=Gst.ElementFactory.make("queue","queue2")
     queue3=Gst.ElementFactory.make("queue","queue3")
@@ -448,7 +442,7 @@ def main(args):
     if not tiler_src_pad:
         sys.stderr.write(" Unable to get src pad \n")
     else:
-        tiler_src_pad.add_probe(Gst.PadProbeType.BUFFER, sgie_sink_pad_buffer_probe, 0)
+        tiler_src_pad.add_probe(Gst.PadProbeType.BUFFER, sgie_sink_pad_buffer_probe, person_name)
 
     # List the sources
     print("Now playing...")
